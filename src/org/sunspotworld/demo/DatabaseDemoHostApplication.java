@@ -1,26 +1,3 @@
-/*
- * DatabaseDemoHostApplication.java
- *
- * Copyright (c) 2008 Sun Microsystems, Inc.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to
- * deal in the Software without restriction, including without limitation the
- * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
- * sell copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
- * DEALINGS IN THE SOFTWARE.
- */
 
 package org.sunspotworld.demo;
 
@@ -30,6 +7,10 @@ import com.sun.spot.io.j2me.radiostream.*;
 import com.sun.spot.io.j2me.radiogram.*;
 import com.sun.spot.util.IEEEAddress;
 import com.sun.spot.peripheral.TimeoutException;
+import com.sun.spot.peripheral.radio.RadioPolicy;
+import com.sun.spot.util.Utils;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 
 import java.io.*;
 import java.sql.DriverManager;
@@ -37,26 +18,13 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.Statement;
 import java.sql.SQLException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.microedition.io.*;
+import javax.swing.Timer;
 
 
-/**
- * This application is the 'on Desktop' portion of the DatabaseDemo. 
- * This host application collects sensor samples sent by the 'on SPOT'
- * portion running on neighboring SPOTs and stores the samples in a
- * database. The application then performs some simple analysis on the
- * collected data using SQL queries. 
- * 
- * This demo requires the popular open-source database, mySQL, to be 
- * installed. See http://www.sun.com/mysql for downloading and installation
- * instructions. This application was tested with mySQL version
- * 5.0.51 and the JDBC driver for that is stored in the jdbc-driver
- * directory. If you end up using a different version, be sure to edit the
- * build.properties file to include the appropriate JDBC driver in the
- * user.classpath property. 
- *   
- * @author: Vipul Gupta
- */
+
 public class DatabaseDemoHostApplication {
     // Broadcast port on which we listen for sensor samples
     private static final int DATA_SINK_PORT = 67;
@@ -71,22 +39,23 @@ public class DatabaseDemoHostApplication {
     // need to modify these settings appropriately.
     // Obviously, an empty password should never be used for anything more
     // serious than a test setup. 
-    private static final String DATABASE_URL = "jdbc:mysql://localhost:3306/";
-    private static final String DATABASE_NAME = "Test";
-    private static final String DATABASE_USER = "root";
+    private static final String DATABASE_URL = "jdbc:mysql://192.168.1.6:3306/";
+    private static final String DATABASE_NAME = "wim2";
+    private static final String DATABASE_USER = "user";
     private static final String DATABASE_PASSWORD = "";
     private static final String JDBC_DRIVER = "com.mysql.jdbc.Driver";
     // Name of the database table where we store sensor readings
-    private static final String DATA_TABLE_NAME = "lightReadings";
+    private static final String DATA_TABLE_NAME = "lightreadings";
     
     // Duration (in milliseconds) for which to collect samples.
-    private static final int SAMPLING_DURATION = 60000; 
+    private static final int SAMPLING_DURATION = 10000; 
     // This is how long we block waiting to read data on the
     // radio connection. Without a timeout, the host application
     // could run well beyond the duration specified above, e.g. if
     // there are no SPOTs transmitting sensor samples.
     private static final int CONNECTION_TIMEOUT = 10000; 
     private static double value;
+    private int s1;
     
     private Statement stmt = null;
     private java.sql.Connection dbCon = null;
@@ -95,41 +64,46 @@ public class DatabaseDemoHostApplication {
     private void run() throws Exception {
         try {
             setUp();
-            
-            String query = "SELECT * FROM weight";
+//            dbCons();
+            String query = "SELECT * FROM weight ORDER BY ID Desc Limit 1";
             PreparedStatement pst = dbCon.prepareStatement(query);
             ResultSet rs = pst.executeQuery();
             while(rs.next()){
                 value = rs.getDouble("BeratWim1");
-                System.out.println(value);
+                s1 = rs.getInt("id");
+                System.out.println(s1);
+                
             }
-            if(value>=60000){
+            
+            while(value>=6000){
+            
             collectData();
-            analyzeData();
+//            analyzeData();
+            
+            tearDown();
             }
+                
+            
         } catch (Exception e) {
             e.printStackTrace();
-        } finally {
-            tearDown();
-        }
+        } 
+//            tearDown();
+            
+        
     }
-    
+    private void dbCons() throws Exception{
+        
+    }
     private void setUp() throws Exception {
         System.out.println("Database demo application starting ... ");
         try {            
-            // Register the JDBC driver for mysql
-            // This is typically found in a JAR file
-            // named something like 
-            // mysql-connector-java-<version>-bin.jar
-            // which should be in the classpath
-            // See user.classpath in build.properties
-            // for this Sun SPOT host application
+           
             Class.forName(JDBC_DRIVER);
 
-            // Define URL of database server for
+            
             String url = DATABASE_URL + DATABASE_NAME;
             
-            // Get a connection to the database for given user/password
+            
             dbCon = DriverManager.getConnection(url, DATABASE_USER,
                     DATABASE_PASSWORD);
             
@@ -147,10 +121,8 @@ public class DatabaseDemoHostApplication {
         try {
             // Get a Statement object
             stmt = dbCon.createStatement();
-            
-            // Delete the data collection table if left over
-            // from a previous run. If no table exists, an
-            // exception will be thrown.
+//            
+//           
 //            try {
 //                stmt.executeUpdate("DROP TABLE " + DATA_TABLE_NAME);
 //                System.out.println("Existing table deleted.");
@@ -171,9 +143,7 @@ public class DatabaseDemoHostApplication {
 //                    "CREATE TABLE " + DATA_TABLE_NAME + " (spotId char(20), " +
 //                    "timestamp timestamp, reading smallint(4) unsigned)");
 
-            // Let's also open up a server-side broadcast radiogram connection
-            // on which to listen for sensor readings being sent by different
-            // SPOTs
+            
             rCon = (RadiogramConnection) Connector.open("radiogram://:" +
                     DATA_SINK_PORT);
             // wait a finite time for data to arrive whenever we call receive()
@@ -189,6 +159,9 @@ public class DatabaseDemoHostApplication {
         String id = null;
         String ts = null;
         int val = 0;
+        double xval = 0;
+        double yval = 0;
+        double zval = 0;
         int sampleCnt = 0;
         Datagram dg = null;
         long start = 0L;
@@ -206,18 +179,21 @@ public class DatabaseDemoHostApplication {
                 rCon.receive(dg);
                 id = dg.readUTF();  // read sender's Id
                 ts = dg.readUTF();  // read time stamp for the reading
-                val = dg.readInt(); // read the sensor value
+//                val = dg.readInt(); // read the sensor value
+                xval = dg.readDouble();
+                yval = dg.readDouble();
+                zval = dg.readDouble();
                 System.out.println("*");
                 stmt.executeUpdate("INSERT INTO " + DATA_TABLE_NAME +
-                        "(spotId,timestamp,reading)" +
-                        " VALUES(\'" + id + "\',\'" + ts + "\'," + val + ")");
+                        "(spotId,x_accel,y_accel,z_accel)" +
+                        "VALUES('" + id + "'  , '" + xval + "' , '"+yval+"' , '"+zval+"' )");
                 sampleCnt++;
             } catch (TimeoutException e) {
                 System.err.println("!");
             } catch (SQLException e) {
                 System.err.println("Caught " + e + 
                         " while storing sensor sample <" +
-                        "\'" + id + "\',\'" + ts + "\'," + val + ">");
+                        "'" + id + "','" + xval + "','"+yval+"','"+zval+"' >");
                 throw e;
             } catch (Exception e) {
                 System.err.println("Caught " + e + 
@@ -294,9 +270,11 @@ public class DatabaseDemoHostApplication {
     }
     
     public void tearDown() throws Exception {
+        
         if (dbCon != null) dbCon.close();
         if (rCon != null) rCon.close();
-        System.exit(0);
+        
+//        System.exit(0);
     }
     
     /**
